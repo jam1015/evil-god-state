@@ -47,6 +47,7 @@
 ;;     (evil-define-key 'god global-map [escape] 'evil-god-state-bail)
 
 
+
 ;;; Code:
 (require 'evil)
 (require 'god-mode)
@@ -60,70 +61,128 @@
   :input-method t
   :intercept-esc nil)
 
+(defvar evil-visual-state-map-backup nil)
+
 (defun evil-god-start-hook ()
   "Run before entering `evil-god-state'."
+  (remove-hook 'activate-mark-hook 'evil-visual-activate-hook t)
+  (remove-hook 'deactivate-mark-hook 'evil-visual-deactivate-hook t)
   (god-local-mode 1))
 
 (defun evil-god-stop-hook ()
   "Run before exiting `evil-god-state'."
-  (god-local-mode -1))
+  (add-hook 'deactivate-mark-hook #'evil-visual-deactivate-hook nil t)
+  (add-hook 'activate-mark-hook #'evil-visual-activate-hook nil t)
+  (unless persist_visual (deactivate-mark))
+  (if mark-active
+	(evil-visual-activate-hook)
+	)
 
-(defvar evil-execute-in-god-state-buffer nil)
+  ;;(deactivate-mark)
+  (god-local-mode -1)
+  ) ; Restore the keymap
 
-(defvar evil-god-last-command nil)
 
-(defun evil-god-fix-last-command ()
+(defvar evil-execute-in-god-state-buffer nil) ;just in case I need it for further development
+(defvar evil-god-last-command nil) ; command before entering evil-god-state
+(defvar ran-first-evil-command nil)
+
+( defun evil-god-fix-last-command ()
   "Change `last-command' to be the command before `evil-execute-in-god-state'."
-  (setq last-command evil-god-last-command))
-
-(defun evil-stop-execute-in-god-state ()
-  "Switch back to previous evil state."
-  (unless (or (eq this-command #'evil-execute-in-god-state)
-              (eq this-command #'universal-argument)
-              (eq this-command #'universal-argument-minus)
-              (eq this-command #'universal-argument-more)
-              (eq this-command #'universal-argument-other-key)
-              (eq this-command #'digit-argument)
-              (eq this-command #'negative-argument)
-              (minibufferp))
+  (if (not ran-first-evil-command)
+      (progn
+	(setq last-command evil-god-last-command)
+	(setq ran-first-evil-command t)
+	) 
     (remove-hook 'pre-command-hook 'evil-god-fix-last-command)
-    (remove-hook 'post-command-hook 'evil-stop-execute-in-god-state)
-    (when (buffer-live-p evil-execute-in-god-state-buffer)
-      (with-current-buffer evil-execute-in-god-state-buffer
-        (if (and (eq evil-previous-state 'visual)
-                 (not (use-region-p)))
-            (progn
-              (evil-change-to-previous-state)
-              (evil-exit-visual-state))
-          (evil-change-to-previous-state))))
-    (setq evil-execute-in-god-state-buffer nil)))
+    )
+  )
 
 ;;;###autoload
 (defun evil-execute-in-god-state ()
-  "Execute the next command in God state."
+  "Go into god state, as if it is normal mode"
   (interactive)
-  (add-hook 'pre-command-hook #'evil-god-fix-last-command t)
-  (add-hook 'post-command-hook #'evil-stop-execute-in-god-state t)
+
+  (setq ran-first-evil-command nil)
+  (add-hook 'pre-command-hook  #'evil-god-fix-last-command      t) ; (setq last-command evil-god-last-command))
   (setq evil-execute-in-god-state-buffer (current-buffer))
   (setq evil-god-last-command last-command)
   (cond
-   ((evil-visual-state-p)
+   ((and (evil-visual-state-p) persist_visual)
     (let ((mrk (mark))
-          (pnt (point)))
-      (evil-god-state)
+      (pnt (point)))
+      (evil-god-state 1)
       (set-mark mrk)
-      (goto-char pnt)))
-   (t
-    (evil-god-state)))
-  (evil-echo "Switched to God state for the next command ..."))
+      (goto-char pnt))
 
-;;; Unconditionally exit Evil-God state.
-(defun evil-god-state-bail ()
-  "Stop current God command and exit God state."
+    )
+   (t
+    (evil-god-state 1)))
+  )
+
+
+(defun evil-stop-execute-in-god-state (bail)
   (interactive)
-  (evil-stop-execute-in-god-state)
-  (evil-god-stop-hook)
-  (evil-normal-state))
+  "Switch back to previous evil state."
+  (unless (or (eq this-command #'evil-execute-in-god-state)
+	      (eq this-command #'universal-argument)
+	      (eq this-command #'universal-argument-minus)
+	      (eq this-command #'universal-argument-more)
+	      (eq this-command #'universal-argument-other-key)
+	      (eq this-command #'digit-argument)
+	      (eq this-command #'negative-argument)
+	      (minibufferp))
+    (remove-hook 'pre-command-hook 'evil-god-fix-last-command)
+	   (if bail
+		 (evil-normal-state 1)
+	     (evil-insert-state 1))
+    (setq evil-execute-in-god-state-buffer nil)
+    )
+
+  )
+
+
+
+(defun god-toggle (append)
+  (interactive)
+  (if god-local-mode
+      (progn
+	(evil-echo "Switching out of evil-god-mode")
+	(evil-stop-execute-in-god-state nil)
+	(if append (forward-char)); like pressing 'a' in normal mode in vim
+
+	)
+    (progn
+      (evil-echo "Switching into evil-god-mode")
+      (unless (eq evil-state 'normal)
+
+
+	(cond
+	 ((string-equal god_entry_strategy "same")
+	  (unless append
+	    (backward-char)
+	    )
+	  )
+	 ((string-equal god_entry_strategy "toggle")
+
+	  (if append
+	      (backward-char)
+	    )
+	  )
+	 ((string-equal god_entry_strategy "reverse")
+	  ;; doing nothing does the opposite of what vim normally does 
+	  )
+
+	 (t
+	  ;; Do something for "default" or anything else here
+	  (backward-char)
+	  )
+	 )
+	)
+      (evil-execute-in-god-state )
+
+      )))
+
 
 (provide 'evil-god-state)
 ;;; evil-god-state.el ends here
