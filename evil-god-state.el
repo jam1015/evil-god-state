@@ -76,6 +76,25 @@
   "Change `last-command' to be the command before `evil-execute-in-god-state'."
   (setq last-command evil-god-last-command))
 
+;;;###autoload
+(defun evil-execute-in-god-state ()
+  "Execute the next command in God state."
+  (interactive)
+  (add-hook 'pre-command-hook #'evil-god-fix-last-command t)
+  (add-hook 'post-command-hook #'evil-stop-execute-in-god-state t)
+  (setq evil-execute-in-god-state-buffer (current-buffer))
+  (setq evil-god-last-command last-command)
+  (cond
+   ((evil-visual-state-p)
+    (let ((mrk (mark))
+          (pnt (point)))
+      (evil-god-state)
+      (set-mark mrk)
+      (goto-char pnt)))
+   (t
+    (evil-god-state)))
+  (evil-echo "Switched to God state for the next command ..."))
+
 (defun evil-stop-execute-in-god-state ()
   "Switch back to previous evil state."
   (unless (or (eq this-command #'evil-execute-in-god-state)
@@ -98,24 +117,6 @@
           (evil-change-to-previous-state))))
     (setq evil-execute-in-god-state-buffer nil)))
 
-;;;###autoload
-(defun evil-execute-in-god-state ()
-  "Execute the next command in God state."
-  (interactive)
-  (add-hook 'pre-command-hook #'evil-god-fix-last-command t)
-  (add-hook 'post-command-hook #'evil-stop-execute-in-god-state t)
-  (setq evil-execute-in-god-state-buffer (current-buffer))
-  (setq evil-god-last-command last-command)
-  (cond
-   ((evil-visual-state-p)
-    (let ((mrk (mark))
-          (pnt (point)))
-      (evil-god-state)
-      (set-mark mrk)
-      (goto-char pnt)))
-   (t
-    (evil-god-state)))
-  (evil-echo "Switched to God state for the next command ..."))
 
 ;;; Unconditionally exit Evil-God state.
 (defun evil-god-state-bail ()
