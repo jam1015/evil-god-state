@@ -51,6 +51,12 @@
 (require 'evil)
 (require 'god-mode)
 
+
+;; Silence native‑compiler warnings for functions from simple.el
+(declare-function universal-argument-other-key "simple")
+(declare-function universal-argument-minus      "simple")
+
+
 (evil-define-state god
   "God state."
   :tag " <G> "
